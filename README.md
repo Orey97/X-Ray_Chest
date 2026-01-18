@@ -72,5 +72,3 @@ python src/main.py
 - [ ] **Training Evaluation**: Training loop ready for initial execution and metric logging.
 
 ---
-
-_Created by Antigravity Team_

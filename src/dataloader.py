@@ -6,53 +6,74 @@ from PIL import Image
 
 class ChestXRayDataset(Dataset):
     def __init__(self, dataframe, image_dir, transform=None):
-        self.dataframe = dataframe.reset_index(drop=True) #riassegnamo gli indici da 0 a n-1 dopo lo split
-        self.image_dir = image_dir
-        self.transform = transform #pipeline di trasformazioni (Resize, ToTensor, Normalize, …).
+        self.dataframe = dataframe.reset_index(drop=True) # Reset indices to 0...n-1 after splitting
+        
+        # Explicit Absolute Path Resolution
+        self.image_dir = os.path.abspath(image_dir)
+        # We don't print here to avoid flooding logs (Dataset init happens often), 
+        # but the passed path MUST be valid/absolute by now.
+        if not os.path.exists(self.image_dir):
+             raise FileNotFoundError(f"CRITICAL ERROR (DataLoader): Image directory not found at: {self.image_dir}")
+
+        self.transform = transform # Transformation pipeline (Resize, ToTensor, Normalize, etc.)
 
         self.image_path = self.dataframe["image"].values
-        #image non è più una label e patient serve solo allo split già fatto non al training
+        # 'image' is not a label, and 'patientid' was used for splitting but is not needed for training input
         self.labels_col = [col for col in self.dataframe.columns if col not in ["image", "patientid"]]
-        #Creiamo matrice dopo l'one-hot-encoding, ogni riga avrà valori 0/1 per ogni label
+        
+        # Create matrix after one-hot-encoding, each row will have 0/1 values for each label
+        # Convert to float32 because PyTorch works primarily with this type for gradients
         self.labels = self.dataframe[self.labels_col].values.astype('float32')
-        #Necessario convertire in float32 per PyTorch
+        # Necessary conversion to float32 for PyTorch
 
     def __len__(self):
-        return len(self.dataframe) #serve a pytorch quando fermarsi 
+        return len(self.dataframe) # Required by PyTorch to know when to stop iteration
     
-    def __getitem__(self, idx): #idx sta per posizione(index)
+    def __getitem__(self, idx): # idx stands for index (position)
+        """
+        Retrieves a single sample (image + label) from the dataset.
+        This method is called by the DataLoader thousands of times to assemble batches.
+        """
         img_name = self.image_path[idx]
         img_path = os.path.join(self.image_dir, img_name)
+        
+        # Rigorous check inside getitem might be too slow, trusting the initialization check.
 
-        #caricare immagine e convertire in RGB (ray di solito sono scala di grigi invece CNN si aspetta 3 canali)
+        # Load image and convert to RGB (X-rays are usually grayscale, but Pre-trained CNNs expect 3 channels)
         image = Image.open(img_path).convert("RGB")
 
         if self.transform:
             image = self.transform(image)
         '''
-        trasformiamo la nostra nostra PIL image in un tensore PyTorch
-        fa 1) Resize in 224x224 se non già fatto 2) Augmentation (leggere variazioni delle immagini come rotazioni, flip orizzontali, zoom) 
-        3) Converte in tensore da Height x Width x Channels a Channels x Height x Width , perchè Pythorc usa CHW
-        4) Normalizza tensor = (tensor - mean) / std per ogni canale RGB
+        Transforms our PIL image into a PyTorch tensor:
+        1) Resize to 224x224 if not done already.
+        2) Augmentation (slight variations like rotations, horizontal flips, zoom).
+        3) Converts from Height x Width x Channels to Channels x Height x Width (PyTorch format).
+        4) Normalizes tensor = (tensor - mean) / std for each RGB channel.
         '''
-        labels = torch.tensor(self.labels[idx], dtype=torch.float32) #convertiamo array numpy in tensore PyTorch
+        labels = torch.tensor(self.labels[idx], dtype=torch.float32) # Convert numpy array to PyTorch tensor
         return image, labels
     
 
 def get_transforms(image_size=224):
-    train_transform = transforms.Compose([ #tranform per il training set
+    """
+    Defines the Image Augmentation Pipeline.
+    Augmentation creates variations of images (flips, rotations) to prevent the model from memorizing exact pixels.
+    It forces the model to learn structural features.
+    """
+    train_transform = transforms.Compose([ # Transform for training set
         transforms.Resize((image_size, image_size)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=5),
-        transforms.ToTensor(),
+        transforms.RandomHorizontalFlip(p=0.5), # Simulated different patient positioning
+        transforms.RandomRotation(degrees=5),   # Simulated slight tilt
+        transforms.ToTensor(), # Converts 0-255 pixels to 0.0-1.0 tensors
         transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],  #sono valori standard per ImageNet
+            mean=[0.485, 0.456, 0.406],  # Standard values for ImageNet
             std=[0.229, 0.224, 0.225]
         )
     ])
         
     base_transform = transforms.Compose([
-        transforms.Resize((image_size, image_size)), #transform per validation e test set
+        transforms.Resize((image_size, image_size)), # Transform for validation and test sets
         transforms.ToTensor(),
         transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -72,7 +93,7 @@ def create_dataloader(train_df, val_df, test_df, image_dir, batch_size=32, num_w
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-    #pin memory ottimizza performance quando si passa dati dalla CPU alla GPU
+    # pin_memory optimizes performance when transferring data from CPU through to GPU
 
     return train_loader, val_loader, test_loader 
 
