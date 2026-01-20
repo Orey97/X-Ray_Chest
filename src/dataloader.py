@@ -1,10 +1,11 @@
 import os
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset as TorchDataset, DataLoader
 from torchvision.transforms import transforms
+from dataset import Dataset as CustomDataset
 from PIL import Image
 
-class ChestXRayDataset(Dataset):
+class ChestXRayDataset(TorchDataset):
     def __init__(self, dataframe, image_dir, transform=None):
         self.dataframe = dataframe.reset_index(drop=True) # Reset indices to 0...n-1 after splitting
         
@@ -96,4 +97,3 @@ def create_dataloader(train_df, val_df, test_df, image_dir, batch_size=32, num_w
     # pin_memory optimizes performance when transferring data from CPU through to GPU
 
     return train_loader, val_loader, test_loader 
-

@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score
+import argparse
 from dataset import Dataset
 from dataloader import create_dataloader
 from model import MultiLabelResNet
@@ -211,7 +212,7 @@ def main():
         if val_auc > best_val_auc:
             best_val_auc = val_auc
             epochs_no_improve = 0
-            save_path = os.path.join(PROJECT_ROOT, "best_model.pth")
+            save_path = os.path.join(abs_output_dir, "best_model.pth")
             torch.save(model.state_dict(), save_path)
             print(f"⚡ Best Model Saved! (AUC improved to {val_auc:.4f})")
         else:
@@ -227,7 +228,7 @@ def main():
     # 5. Final Test Evaluation
     print("\n--- Running Final Evaluation on TEST SET ---")
     # Load best model
-    model.load_state_dict(torch.load(os.path.join(PROJECT_ROOT, "best_model.pth")))
+    model.load_state_dict(torch.load(os.path.join(abs_output_dir, "best_model.pth")))
     test_loss, test_auc, test_class_auc = validate(model, test_loader, criterion, CONFIG['device'], labels_list)
     
     print(f"Test Loss: {test_loss:.4f} | Test Mean AUROC: {test_auc:.4f}")
