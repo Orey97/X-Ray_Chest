@@ -1,5 +1,39 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-images-224/
+Thumbs.db
 ~$*
+
+# Large Data (Do not commit)
+images-224/
+src/Data_Entry_2017.csv
+
+# Model Binaries (Stored externally)
+output/*.pth
+output/*.h5
+*.pth
+*.h5
+
+# Generated Reports (Regeneratable)
+ablation_report.md
+calibration_data.csv
+error_analysis_report.md
+error_gallery.png
+ablation_results/
+test_env/
+
+# Jupyter
+.ipynb_checkpoints/

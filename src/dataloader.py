@@ -63,12 +63,13 @@ def get_transforms(image_size=224):
     It forces the model to learn structural features.
     """
     train_transform = transforms.Compose([ # Transform for training set
-        transforms.Resize((image_size, image_size)),
-        transforms.RandomHorizontalFlip(p=0.5), # Simulated different patient positioning
-        transforms.RandomRotation(degrees=5),   # Simulated slight tilt
-        transforms.ToTensor(), # Converts 0-255 pixels to 0.0-1.0 tensors
+        transforms.RandomResizedCrop(image_size, scale=(0.9, 1.1)), # Zoom (Domain Aware)
+        transforms.RandomHorizontalFlip(p=0.5), 
+        transforms.RandomRotation(degrees=7),   # Slight tilt
+        transforms.ColorJitter(brightness=0.1, contrast=0.1), # Contrast modulation
+        transforms.ToTensor(), 
         transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],  # Standard values for ImageNet
+            mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225]
         )
     ])
@@ -84,10 +85,16 @@ def get_transforms(image_size=224):
     return train_transform, base_transform, base_transform
 
 
-def create_dataloader(train_df, val_df, test_df, image_dir, batch_size=32, num_workers=0, image_size=224):
+def create_dataloader(train_df, val_df, test_df, image_dir, batch_size=32, num_workers=0, image_size=224, augment=True):
     train_tf, val_tf, test_tf = get_transforms(image_size)
 
-    train_set = ChestXRayDataset(train_df, image_dir, transform=train_tf)
+    # If augmentation disabled, use base transform (val_tf) for training
+    final_train_tf = train_tf if augment else val_tf
+    
+    if not augment:
+        print("[DATA] Augmentations DISABLED (Ablation Mode).")
+
+    train_set = ChestXRayDataset(train_df, image_dir, transform=final_train_tf)
     val_set = ChestXRayDataset(val_df, image_dir, transform=val_tf)
     test_set = ChestXRayDataset(test_df, image_dir, transform=test_tf)
 

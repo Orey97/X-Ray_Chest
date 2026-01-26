@@ -92,6 +92,7 @@ class Dataset:
             return
         print("---------------------- Cleaning column names --------------------------")
         
+        # 1. Basic Cleaning
         self.data.columns = (
             self.data.columns
                 .str.strip()
@@ -100,7 +101,21 @@ class Dataset:
                 .str.replace("(", "")
                 .str.replace(")", "")
         )
-
+        
+        # 2. Canonical Standardization
+        # We want internal code to always use 'image', 'patientid'
+        rename_map = {}
+        if "image_index" in self.data.columns:
+            rename_map["image_index"] = "image"
+        if "patient_id" in self.data.columns:
+            rename_map["patient_id"] = "patientid"
+        if "finding_labels" in self.data.columns:
+             # Just ensures we can find it later, even if we renamed it earlier.
+             pass 
+             
+        if rename_map:
+            print(f"Standardizing columns: {rename_map}")
+            self.data = self.data.rename(columns=rename_map)
 
     # Parses and cleans multi-label entries (separated by pipe |)
     def clean_labels(self, column_name):
@@ -117,25 +132,32 @@ class Dataset:
         self.data[column_name] = self.data[column_name].str.replace(" ","").str.split('|')
 
     # Performs One-Hot Encoding on the labels
-    def one_hot_encode_labels(self, column="label"):
+    def one_hot_encode_labels(self, column="label", explicit_labels=None):
         """
         Converts the list of text labels into a mathematical vector representation.
-        Example: If labels are ['Pneumonia', 'Edema'], two new columns 'Pneumonia' and 'Edema'
-        will be created with value 1, while others will be 0.
-        This is essential for Multi-Label Classification.
+        CRITICAL: If 'explicit_labels' is provided (from Schema), it forces that exact order.
+        This prevents 'Data Leakage' where train and test sets might have different sorted orders
+        if a rare class is missing in one of them.
         """
-        unique_labels = sorted(
-            set(label for sublist in self.data[column] for label in sublist)
-        )
+        if explicit_labels:
+            print(f"[DATASET] One-Hot Encoding utilizing STRICT SCHEMA with {len(explicit_labels)} classes.")
+            unique_labels = explicit_labels
+        else:
+            print("[DATASET] WARNING: No explicit header provided. Deriving from data (Risk of Skew).")
+            unique_labels = sorted(
+                set(label for sublist in self.data[column] for label in sublist)
+            )
+            
         for label in unique_labels:
+            # Check if label exists in the row's list
             self.data[label] = self.data[column].apply(lambda x: int(label in x))
 
     # For CNN training, we only need the image path, patient ID, and the one-hot encoded labels
     def select_relevant_columns(self):
         # Columns to explicitly exclude (metadata that should not be targets)
-        # Note: clean_column_names() removes parens and lowercases everything
         exclude_cols = [
             'label', 
+            'finding_labels',
             'follow-up', 
             'patientage', 
             'patientgender', 
@@ -143,23 +165,34 @@ class Dataset:
             'originalimagewidth', 
             'originalimageheight', 
             'originalimagepixelspacingx', 
-            'originalimagepixelspacingy'
+            'originalimagepixelspacingy',
+            'follow-up_#',
+            'patient_age',
+            'patient_gender',
+            'view_position',
+            'original_image_width',
+            'original_image_height',
+            'original_image_pixel_spacing_x',
+            'original_image_pixel_spacing_y'
         ]
         
-        keep = ['image', 'patientid'] + [
+        # Ensure we keep image and patientid if they exist
+        base_cols = ['image', 'patientid']
+        targets = [
             col for col in self.data.columns 
-            if col not in ['image', 'patientid'] and col not in exclude_cols
+            if col not in base_cols and col not in exclude_cols
         ]
-        print(f"Keeping columns (Targets): {[k for k in keep if k not in ['image', 'patientid']]}")
-        self.data = self.data[keep]
+        
+        print(f"Keeping columns (Targets): {targets}")
+        self.data = self.data[base_cols + targets]
 
 
     # Verify that image files exist in the specified directory to avoid training crashes due to missing/corrupt files
     def check_image_files(self, image_dir):
         """
         Data Integrity Check.
-        Verifies that every image filename in the CSV actually exists on the disk.
-        Returns a list of missing files to prevent runtime errors during training.
+        Verifies that all images in the dataframe exist on disk.
+        Returns a list of missing filenames.
         """
         abs_image_dir = os.path.abspath(image_dir)
         print(f"[DATA INTEGRITY] Checking images in Absolute Path: {abs_image_dir}")
@@ -167,7 +200,13 @@ class Dataset:
         if not os.path.isdir(abs_image_dir):
              raise FileNotFoundError(f"CRITICAL ERROR: The image directory provided does not exist:\n{abs_image_dir}")
 
-        missing = [img for img in self.data['image'] if not os.path.exists(os.path.join(abs_image_dir, img))]
+        # Column name might be 'image' or 'image_index' depending on cleaning
+        col = 'image' if 'image' in self.data.columns else 'image_index'
+        if col not in self.data.columns:
+            print("[DATA] Warning: Could not find image column to check file existence.")
+            return []
+            
+        missing = [img for img in self.data[col] if not os.path.exists(os.path.join(abs_image_dir, img))]
         return missing
     
     # IMPORTANT: Risk of DATA LEAKAGE if splitting is done directly on the dataframe (random shuffle).

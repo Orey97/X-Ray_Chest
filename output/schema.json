@@ -1,0 +1,13 @@
+{
+    "label_list": [
+        "Edema",
+        "Hernia",
+        "Infiltration",
+        "NoFinding",
+        "Pneumonia"
+    ],
+    "num_classes": 5,
+    "metadata_checksum": "b933fbac4f602f450575bb46b574a99d",
+    "timestamp": "2026-01-26T14:38:02.295806",
+    "version": "1.0"
+}

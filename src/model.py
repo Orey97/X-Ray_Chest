@@ -10,13 +10,13 @@ class MultiLabelResNet(nn.Module):
         # Transfer Learning: We use weights learned from ImageNet.
         # This gives the model a "head start" in understanding shapes and textures.
         weights = models.ResNet50_Weights.DEFAULT if pretrained else None
-        self.resnet = models.resnet50(weights=weights)
+        self.base = models.resnet50(weights=weights)
         
         # Replace the final fully connected layer
         # ResNet50's original fc layer input features is 2048 and output is 1000 (ImageNet classes).
         # We perform "Surgery" here: removing the 1000-class head and attaching our 14-class head.
-        in_features = self.resnet.fc.in_features
-        self.resnet.fc = nn.Linear(in_features, num_classes)
+        in_features = self.base.fc.in_features
+        self.base.fc = nn.Linear(in_features, num_classes)
         
     def forward(self, x):
         # We process the input through the ResNet backbone
@@ -24,7 +24,7 @@ class MultiLabelResNet(nn.Module):
         # IMPORTANT: We do NOT apply Sigmoid here. 
         # The loss function 'BCEWithLogitsLoss' includes a Sigmoid layer internally.
         # This is numerically more stable than doing Sigmoid + BCELoss separately.
-        return self.resnet(x)
+        return self.base(x)
 
 if __name__ == "__main__":
     # Simple test to verify the model implementation
