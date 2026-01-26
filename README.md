@@ -150,5 +150,3 @@ python src/ablation.py --epochs 10
 | **Inference Time** | < 200ms | ⚡ Optimized |
 
 ---
-
-> Engineered by Antigravity & User (Technical PM)
