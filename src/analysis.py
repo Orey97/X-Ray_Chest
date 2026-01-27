@@ -1,19 +1,20 @@
-
 import torch
 import numpy as np
 import os
 from tqdm import tqdm
+
 
 class ErrorSlicer:
     """
     Identifies specific samples where the model fails most confidently.
     Useful for qualitative error analysis.
     """
-    def __init__(self, model, dataloader, manifest, device):
+    def __init__(self, model, dataloader, manifest, device, image_dir=None):
         self.model = model
         self.dataloader = dataloader
         self.manifest = manifest
         self.device = device
+        self.image_dir = image_dir  # Store for visualization
         
     def find_top_errors(self, k=5):
         """
@@ -182,47 +183,26 @@ class ErrorSlicer:
         print(f"[INFO] Gallery saved.")
 
     def _show_image(self, ax, path, title):
+        """Display image in matplotlib axis with proper path resolution."""
         try:
             import matplotlib.pyplot as plt
             from PIL import Image
             
-            # Check if path is absolute or needs resolution
-            # In our setup, 'path' from DataFrame might be just filename. 
-            # We need the base image directory. But wait, datasets usually have abs path or we assumed it.
-            # In dataset.py, we only stored filename? 
-            # Let's check Main.py -> dataset_manager.data
-            
-            # NOTE: We don't have the image_dir here easily unless passed.
-            # We will rely on absolute paths if possible, or try to guess.
-            # Actually, `ChestXRayDataset` builds the path in `__getitem__`.
-            # Let's assume the path in result is what we need or we try to find it.
-            
-            # Workaround: Use the root of the test_env if path is relative
-            # But we don't know the root here. 
-            # Let's hope the path is valid. If not, placeholder.
-            
-            # Simple heuristic: If not exists, try finding it in current dir/test_env/images
+            # Resolve path using stored image_dir if available
             display_path = path
-            if not os.path.exists(display_path):
-                 # Try typical locations
-                 candidates = [
-                     os.path.join("test_env", "images", path),
-                     os.path.join("..", "test_env", "images", path)
-                 ]
-                 for c in candidates:
-                     if os.path.exists(c):
-                         display_path = c
-                         break
+            if not os.path.exists(display_path) and self.image_dir:
+                display_path = os.path.join(self.image_dir, path)
             
             if os.path.exists(display_path):
                 img = Image.open(display_path).convert("RGB")
                 ax.imshow(img, cmap="gray")
             else:
-                ax.text(0.5, 0.5, "Image Not Found", ha='center')
+                ax.text(0.5, 0.5, "Image Not Found", ha='center', va='center')
                 
             ax.set_title(title, fontsize=8, color='red')
             ax.axis('off')
         except Exception as e:
-            ax.text(0.5, 0.5, "Error Load", ha='center')
+            ax.text(0.5, 0.5, "Error Load", ha='center', va='center')
             ax.axis('off')
             print(f"[WARNING] Viz Error: {e}")
+

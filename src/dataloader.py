@@ -2,7 +2,6 @@ import os
 import torch
 from torch.utils.data import Dataset as TorchDataset, DataLoader
 from torchvision.transforms import transforms
-from dataset import Dataset as CustomDataset
 from PIL import Image
 
 class ChestXRayDataset(TorchDataset):

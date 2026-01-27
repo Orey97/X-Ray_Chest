@@ -72,8 +72,6 @@ class ClinicalMetricContainer:
         y_pred_binary = (y_probs > 0.5).astype(int)
         metrics["f1_macro"] = f1_score(y_true, y_pred_binary, average='macro', zero_division=0)
         
-        metrics["f1_macro"] = f1_score(y_true, y_pred_binary, average='macro', zero_division=0)
-        
         return metrics
 
     def compute_bootstrap_ci(self, n_rounds=1000, confidence=0.95):

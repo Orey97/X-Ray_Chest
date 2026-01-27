@@ -135,3 +135,7 @@ class DatasetManifest:
                 f"❌ CRITICAL INFERENCE MISMATCH: Prediction vector has size {width}, "
                 f"expected {self.num_classes}."
             )
+
+    def __repr__(self):
+        return f"DatasetManifest(classes={self.num_classes}, version={self.timestamp})"
+

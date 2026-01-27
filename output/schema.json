@@ -1,13 +1,23 @@
 {
     "label_list": [
+        "Atelectasis",
+        "Cardiomegaly",
+        "Consolidation",
         "Edema",
+        "Effusion",
+        "Emphysema",
+        "Fibrosis",
         "Hernia",
         "Infiltration",
-        "NoFinding",
-        "Pneumonia"
+        "Mass",
+        "Nodule",
+        "Pleural_Thickening",
+        "Pneumonia",
+        "Pneumothorax"
     ],
-    "num_classes": 5,
-    "metadata_checksum": "b933fbac4f602f450575bb46b574a99d",
-    "timestamp": "2026-01-26T14:38:02.295806",
-    "version": "1.0"
+    "num_classes": 14,
+    "metadata_checksum": "example_full_dataset_checksum",
+    "timestamp": "2026-01-27T20:00:00.000000",
+    "version": "1.0",
+    "_note": "This is the canonical 14-class schema for the full NIH dataset. Training on sample data will generate a subset schema."
 }

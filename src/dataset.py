@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import os
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 class Dataset:
@@ -233,14 +232,3 @@ class Dataset:
         val_df = self.data[self.data['patientid'].isin(val_p)]
         test_df = self.data[self.data['patientid'].isin(test_p)]
         return train_df, val_df, test_df
-
-    
-    
-
-
-
-    
-    
-    
-
-

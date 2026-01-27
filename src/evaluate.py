@@ -1,8 +1,5 @@
-
 import os
 import torch
-import pandas as pd
-import numpy as np
 import argparse
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -137,7 +134,7 @@ def evaluate_pipeline():
     # 7. Error Slicing (Phase 4)
     if args.slice_errors:
         print("[ANALYSIS] Running Error Slicing...")
-        slicer = ErrorSlicer(model, test_loader, manifest, device)
+        slicer = ErrorSlicer(model, test_loader, manifest, device, image_dir=img_dir)
         errors = slicer.find_top_errors(k=5)
         
         report_path = os.path.join(base_dir, "error_analysis_report.md")

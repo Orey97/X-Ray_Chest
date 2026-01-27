@@ -207,7 +207,6 @@ def main():
 
     # 5. Training Loop
     print("\n--- Starting Training ---")
-    print("\n--- Starting Training ---")
     best_val_auc = 0.0
     best_val_loss = float('inf')
     epochs_no_improve = 0

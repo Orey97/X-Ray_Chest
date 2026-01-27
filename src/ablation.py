@@ -1,9 +1,7 @@
-
 import os
 import subprocess
 import sys
 import torch
-import pandas as pd
 import argparse
 from schema import DatasetManifest
 from model import MultiLabelResNet
