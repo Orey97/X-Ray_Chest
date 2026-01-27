@@ -1,7 +1,7 @@
 torch
 torchvision
-torchaudio
 pandas
 numpy
 scikit-learn
 Pillow
+tqdm

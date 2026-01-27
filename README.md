@@ -49,11 +49,11 @@ Chest X-rays are among the most frequently performed radiological examinations w
 
 Automated triage systems offer a compelling solution: computationally flag high-risk scans to prioritize radiologist attention. However, clinical reality presents unique challenges:
 
-**Challenge 1: Multi-Pathology Co-occurrence**
+#### Challenge 1: Multi-Pathology Co-occurrence
 
 Unlike standard image classification where each image belongs to exactly one class, chest X-rays frequently exhibit multiple simultaneous findings. A single scan may show Cardiomegaly, Effusion, and Edema together—requiring independent binary predictions for each condition.
 
-**Challenge 2: Extreme Class Imbalance**
+#### Challenge 2: Extreme Class Imbalance
 
 Medical datasets exhibit severe class imbalance:
 
@@ -66,7 +66,7 @@ Medical datasets exhibit severe class imbalance:
 
 A naive model achieves 99.8% accuracy on Hernia by predicting "negative" always—while detecting zero actual cases.
 
-**Challenge 3: Data Leakage Risk**
+#### Challenge 3: Data Leakage Risk
 
 Patients often have multiple scans over time (initial visit, follow-ups). Naive random splitting by image allows patient anatomy to leak between train and test sets, leading to artificially inflated performance that collapses on truly unseen patients.
 
@@ -102,7 +102,7 @@ The dataset derives from the **NIH Clinical Center Chest X-ray Dataset** (Wang e
 
 Our canonical label set, enforced via `schema.json`:
 
-```
+```plaintext
 1. Atelectasis        6. Emphysema         11. Nodule
 2. Cardiomegaly       7. Fibrosis          12. Pleural_Thickening
 3. Consolidation      8. Hernia            13. Pneumonia
@@ -126,7 +126,7 @@ Our canonical label set, enforced via `schema.json`:
 
 The system uses a two-phase architecture optimizing for both GPU training power and local deployment security:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        PHASE 1: CLOUD TRAINING                       │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -164,7 +164,7 @@ The system uses a two-phase architecture optimizing for both GPU training power 
 
 ### 3.2 Directory Structure
 
-```
+```text
 X-Ray_Chest/
 ├── src/
 │   ├── main.py           # Training orchestration & CLI interface
@@ -265,6 +265,7 @@ Medical imaging requires careful augmentation selection. Unlike natural images, 
 | `ColorJitter(brightness=0.1)` | Compensates for equipment calibration differences |
 
 **Excluded Augmentations:**
+
 - Vertical flip (anatomically impossible)
 - Extreme rotations (destroys diagnostic context)
 - Color shifts (X-rays are grayscale)
@@ -581,6 +582,7 @@ def compute_calibration_curve(self, n_bins=10):
 ### 9.1 Schema Enforcement: Fail-Fast Design
 
 Deep learning models fail **silently** when input schema changes:
+
 - Column reordering: "Pneumonia" prediction interpreted as "Atelectasis"
 - Missing classes: Undefined tensor dimensions
 - Version drift: Incompatible label ordering
