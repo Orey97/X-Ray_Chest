@@ -1,3 +1,46 @@
+"""
+=============================================================================
+                    EVALUATE.PY - Comprehensive Model Evaluation
+=============================================================================
+
+PURPOSE:
+    Performs rigorous evaluation of a trained model on the test set.
+    Implements clinical-grade metrics with statistical rigor.
+
+FEATURES:
+
+    1. CORE METRICS
+       - Per-class AUROC (clinical standard)
+       - Mean AUROC (aggregate performance)
+       - F1 Score (precision/recall balance)
+    
+    2. BOOTSTRAP CONFIDENCE INTERVALS (--bootstrap)
+       - Generates 95% CI for Mean AUROC
+       - Required for medical publications
+       - Example output: "AUROC: 0.74 (95% CI: 0.72-0.76)"
+    
+    3. ERROR SLICING (--slice_errors)
+       - Finds Top-K False Positives (model hallucinations)
+       - Finds Top-K False Negatives (missed detections)
+       - Generates visual error gallery
+    
+    4. CALIBRATION ANALYSIS
+       - Checks if probability 70% means actual 70% chance
+       - Outputs calibration curves for model trustworthiness
+
+USAGE:
+    # Basic evaluation
+    python src/evaluate.py
+    
+    # With confidence intervals (slow but rigorous)
+    python src/evaluate.py --bootstrap
+    
+    # With error analysis
+    python src/evaluate.py --slice_errors
+
+=============================================================================
+"""
+
 import os
 import torch
 import argparse
@@ -12,7 +55,9 @@ from schema import DatasetManifest
 from metrics import ClinicalMetricContainer
 from analysis import ErrorSlicer
 
+
 def get_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Evaluate Chest X-Ray Model (Phase 4 Standards).")
     parser.add_argument("--csv_file", type=str, default="Data_Entry_2017.csv",
                         help="Path to CSV metadata.")
@@ -26,19 +71,43 @@ def get_args():
                         help="Generate Error Analysis Report.")
     return parser.parse_args()
 
+
 def evaluate_pipeline():
+    """
+    Main evaluation pipeline.
+    
+    Workflow:
+    1. Resolve paths and load schema
+    2. Prepare test set (using same splits as training)
+    3. Load trained model
+    4. Run inference on entire test set
+    5. Compute metrics
+    6. (Optional) Bootstrap confidence intervals
+    7. (Optional) Error slicing and visualization
+    8. Calibration analysis
+    """
     args = get_args()
     
-    # 1. Path Resolution
+    # ==========================================================================
+    # STEP 1: PATH RESOLUTION
+    # ==========================================================================
+    # Handle both absolute and relative paths gracefully.
+    
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     # Allow command line or default relative paths
     csv_path = args.csv_file if os.path.isabs(args.csv_file) else os.path.join(base_dir, "src", args.csv_file)
-    if not os.path.exists(csv_path): # Fallback
+    if not os.path.exists(csv_path):  # Fallback to base dir
          csv_path = os.path.join(base_dir, args.csv_file)
 
     img_dir = args.data_dir if os.path.isabs(args.data_dir) else os.path.join(base_dir, args.data_dir)
     model_dir = args.model_dir if os.path.isabs(args.model_dir) else os.path.join(base_dir, args.model_dir)
+    
+    # ==========================================================================
+    # STEP 2: LOCATE MODEL FILE
+    # ==========================================================================
+    # First try best_model.pth (saved when validation improved)
+    # Fall back to final_model.pth (saved at end of training)
     
     model_path = os.path.join(model_dir, "best_model.pth")
     if not os.path.exists(model_path):
@@ -54,58 +123,73 @@ def evaluate_pipeline():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[SYSTEM] Device: {device}")
     
-    # 2. Schema Enforcement (Phase 1)
+    # ==========================================================================
+    # STEP 3: SCHEMA ENFORCEMENT
+    # ==========================================================================
+    # The schema is REQUIRED for evaluation. It defines label order.
+    
     if not os.path.exists(schema_path):
         raise FileNotFoundError(f"❌ Critical: schema.json not found in {model_dir}. Evaluation aborted.")
     
     manifest = DatasetManifest.load(schema_path)
     print(f"[SCHEMA] Loaded {manifest.num_classes} classes from {schema_path}")
 
-    # 3. Data Loading (Patient-Aware)
+    # ==========================================================================
+    # STEP 4: DATA LOADING (Patient-Aware Split)
+    # ==========================================================================
+    # CRITICAL: Use the SAME splitting logic as training to get the same test set.
+    # If splits differ, we'd be evaluating on training data → invalid results.
+    
     print("[DATA] Preparing Test Set...")
     project_ds = ProjectDataset(csv_path)
     project_ds.clean_column_names()
-    project_ds.clean_labels("finding_labels") # Or "label", logic handles it
+    project_ds.clean_labels("finding_labels")  # Parse multi-label strings
     
-    # CRITICAL: Use Manifest Labels
+    # Use manifest labels for consistent ordering
     project_ds.one_hot_encode_labels("finding_labels", explicit_labels=manifest.label_list)
     
-    # Check Image integrity
-    project_ds.check_image_files(img_dir) # Warns but proceeds
+    # Check image integrity (warns but proceeds)
+    project_ds.check_image_files(img_dir)
     
-    # Select only numeric targets (removes list-based label columns)
+    # Select only relevant columns
     project_ds.select_relevant_columns()
     
-    # Split
+    # Get test split (same random seed = same split as training)
     _, _, test_df = project_ds.patient_split()
     print(f"[DATA] Test Set Size: {len(test_df)} patients/images")
     
-    # Torch Data
+    # Create PyTorch DataLoader
     _, val_tf, _ = get_transforms()
     test_ds = ChestXRayDataset(test_df, img_dir, val_tf)
     test_loader = DataLoader(test_ds, batch_size=32, shuffle=False, num_workers=0)
     
-    # 4. Model Loading
+    # ==========================================================================
+    # STEP 5: MODEL LOADING
+    # ==========================================================================
     print(f"[MODEL] Loading {model_path}...")
     model = MultiLabelResNet(num_classes=manifest.num_classes)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
     
-    # Validate
+    # Validate model against schema
     manifest.validate_model(model)
     
-    # 5. Core Evaluation
+    # ==========================================================================
+    # STEP 6: CORE EVALUATION
+    # ==========================================================================
     print("[INFO] Starting Inference...")
     metrics = ClinicalMetricContainer(manifest.label_list)
     
     with torch.no_grad():
-        for imgs, labels in tqdm(test_loader):
+        for imgs, labels in tqdm(test_loader, desc="Evaluating"):
             imgs = imgs.to(device)
             logits = model(imgs)
-            metrics.update(labels, logits)
+            metrics.update(labels, logits)  # Accumulate predictions
             
-    # 6. Report Generation
+    # ==========================================================================
+    # STEP 7: REPORT GENERATION
+    # ==========================================================================
     results = metrics.compute()
     
     print("\n" + "="*50)
@@ -114,10 +198,10 @@ def evaluate_pipeline():
     print(f"{'Pathology':<25} | {'AUROC':<10}")
     print("-" * 40)
     
-    # If Bootstrap requested (Phase 4)
+    # If Bootstrap requested, compute confidence intervals
     ci_low, ci_high = (None, None)
     if args.bootstrap:
-        ci_low, ci_high = metrics.compute_bootstrap_ci(n_rounds=500) # 500 for speed demo
+        ci_low, ci_high = metrics.compute_bootstrap_ci(n_rounds=500)  # 500 for speed
         
     for label, score in results["per_class_auroc"].items():
         print(f"{label:<25} | {score:.4f}")
@@ -131,24 +215,34 @@ def evaluate_pipeline():
         print(f"MEAN AUROC:             | {mean_auc:.4f}")
     print("="*50 + "\n")
     
-    # 7. Error Slicing (Phase 4)
+    # ==========================================================================
+    # STEP 8: ERROR SLICING (Optional)
+    # ==========================================================================
+    # Identifies the model's worst mistakes for qualitative review.
+    
     if args.slice_errors:
         print("[ANALYSIS] Running Error Slicing...")
         slicer = ErrorSlicer(model, test_loader, manifest, device, image_dir=img_dir)
         errors = slicer.find_top_errors(k=5)
         
+        # Save markdown report
         report_path = os.path.join(base_dir, "error_analysis_report.md")
         slicer.save_report(errors, report_path)
         
-        # Visual Gallery (Task 9)
+        # Generate visual gallery
         gallery_path = os.path.join(base_dir, "error_gallery.png")
         slicer.plot_top_errors(errors, gallery_path)
 
-    # 8. Calibration Curves (Phase 5)
+    # ==========================================================================
+    # STEP 9: CALIBRATION ANALYSIS
+    # ==========================================================================
+    # Checks if predicted probabilities are well-calibrated.
+    # "When model says 70%, is it actually right 70% of the time?"
+    
     print("[ANALYSIS] Computing Calibration Curves...")
     curves = metrics.compute_calibration_curve(n_bins=10)
     
-    # Save curves to simple CSV for plotting
+    # Save calibration data to CSV for external plotting
     calib_path = os.path.join(base_dir, "calibration_data.csv")
     with open(calib_path, "w") as f:
         f.write("label,prob_pred,prob_true\n")
@@ -156,6 +250,7 @@ def evaluate_pipeline():
             for yt, yp in zip(y_true, y_pred):
                 f.write(f"{label},{yp:.4f},{yt:.4f}\n")
     print(f"[ANALYSIS] Calibration data saved to {calib_path}")
+
 
 if __name__ == "__main__":
     evaluate_pipeline()
